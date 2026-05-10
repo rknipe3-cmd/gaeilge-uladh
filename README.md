@@ -1,4 +1,5 @@
 Gaeilge Uladh — Ulster Irish Study Tool
+
 A self-contained mobile web app for learning Ulster Irish (Gaeilge Uladh), the dialect spoken in Donegal and parts of Northern Ireland. Built as a single HTML file with no external dependencies — works fully offline after first load.
 Features
 📅 Week Plan
