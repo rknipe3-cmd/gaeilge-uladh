@@ -1199,40 +1199,67 @@ buildWriteCards();
 renderPlan();renderFlash();renderBuilder();renderPron();renderWrite();
 </script>
   <script>
-// PostHog custom event tracking for all modes
-document.addEventListener('click', function(e) {
-    var target = e.target.closest('button, a, [onclick]');
-    if (!target) return;
-    var text = target.textContent.trim().toLowerCase();
-    
-    // Main mode navigation
-    if (text.includes('week plan')) posthog.capture('mode_selected', { mode: 'week_plan' });
-    if (text.includes('flashcard')) posthog.capture('mode_selected', { mode: 'flashcards' });
-    if (text.includes('sentence builder')) posthog.capture('mode_selected', { mode: 'sentence_builder' });
-    if (text.includes('pronunciation')) posthog.capture('mode_selected', { mode: 'pronunciation' });
-    if (text.includes('write')) posthog.capture('mode_selected', { mode: 'write' });
-    
-    // Sub-modes
-    if (text.includes('build mode')) posthog.capture('sub_mode_selected', { mode: 'sentence_build' });
-    if (text.includes('quiz mode')) posthog.capture('sub_mode_selected', { mode: 'sentence_quiz' });
-    if (text.includes('vocab')) posthog.capture('sub_mode_selected', { mode: 'write_vocab' });
-    if (text.includes('sentences')) posthog.capture('sub_mode_selected', { mode: 'write_sentences' });
-    
-    // Flashcard deck selection
-    if (target.closest && target.closest('[class*="deck"], [class*="category"]')) {
-        posthog.capture('deck_selected', { deck: text });
-    }
-});
+// PostHog custom event tracking - precise hooks
 
-// Track correct/incorrect answers
-var origScore = window.checkAnswer;
-if (typeof origScore === 'function') {
-    window.checkAnswer = function() {
-        var result = origScore.apply(this, arguments);
-        posthog.capture('answer_submitted');
-        return result;
-    };
-}
+var _origShowPage = showPage;
+showPage = function(id, btn) {
+    posthog.capture('mode_selected', { mode: id });
+    return _origShowPage(id, btn);
+};
+
+var _origSelDeck = selDeck;
+selDeck = function(k) {
+    posthog.capture('deck_selected', { deck: k });
+    return _origSelDeck(k);
+};
+
+var _origFlip = flipCard;
+flipCard = function() {
+    posthog.capture('card_flipped');
+    return _origFlip();
+};
+
+var _origScore = scoreCard;
+scoreCard = function(ok) {
+    posthog.capture('card_scored', { correct: ok });
+    return _origScore(ok);
+};
+
+var _origSetBMode = setBMode;
+setBMode = function(m) {
+    posthog.capture('builder_mode_selected', { mode: m });
+    return _origSetBMode(m);
+};
+
+var _origCheckQ = checkQTyped;
+checkQTyped = function() {
+    posthog.capture('quiz_answer_checked');
+    return _origCheckQ();
+};
+
+var _origSetPT = setPT;
+setPT = function(t) {
+    posthog.capture('pronunciation_tab_selected', { tab: t });
+    return _origSetPT(t);
+};
+
+var _origSetWMode = setWMode;
+setWMode = function(m) {
+    posthog.capture('write_mode_selected', { mode: m });
+    return _origSetWMode(m);
+};
+
+var _origSetWDeck = setWDeck;
+setWDeck = function(k) {
+    posthog.capture('write_deck_selected', { deck: k });
+    return _origSetWDeck(k);
+};
+
+var _origCheckW = checkWrite;
+checkWrite = function() {
+    posthog.capture('write_answer_checked');
+    return _origCheckW();
+};
 </script>
 </body>
 </html>
