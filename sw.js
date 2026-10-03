@@ -1,4 +1,4 @@
-const CACHE = 'gaeilge-uladh-v2';
+const CACHE = 'gaeilge-uladh-v3';
 const ASSETS = ['./'];
 
 self.addEventListener('install', e => {
@@ -20,6 +20,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
