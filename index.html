@@ -296,13 +296,16 @@ if ('serviceWorker' in navigator) {
 </div>
 <script>
 // ── Speech — tiered: Abair API → Web Speech → new tab ───────────────────────
-const ABAIR_API = 'https://abair.ie/api2/synthesise';
+// Abair v3 API sends CORS headers, so no proxy is needed
+const ABAIR_API = 'https://api.abair.ie/v3/synthesis';
+const ABAIR_VOICE = 'ga_UL_anb_piper';
+// Stay under the ~5s click activation window so the new-tab fallback is not popup-blocked
+const ABAIR_TIMEOUT_MS = 4000;
 let _irishVoice = null;
-let _voicesLoaded = false;
 
 function loadVoices() {
-  if (_voicesLoaded) return;
-  _voicesLoaded = true;
+  if (_irishVoice) return;
+  // Voices load async in Firefox/Chrome, so retry until the list is filled
   const voices = speechSynthesis.getVoices();
   _irishVoice = voices.find(v => v.lang === 'ga-IE' || v.lang === 'ga') || null;
 }
@@ -312,34 +315,28 @@ if ('speechSynthesis' in window) {
 }
 
 async function tryAbairAPI(txt) {
-  // Try direct Abair first, then corsproxy.io as fallback
-  const abairPath = 'https://abair.ie/api2/synthesise?input='
-    + encodeURIComponent(txt) + '&voice=ga_UL&audioEncoding=MP3';
-  const proxies = [
-    'https://corsproxy.io/?' + encodeURIComponent(abairPath),
-    'https://api.allorigins.win/get?url=' + encodeURIComponent(abairPath),
-    abairPath
-  ];
-  for (const url of proxies) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      const raw = await res.json();
-      // allorigins wraps in {contents:'...'}
-      const data = raw.contents ? JSON.parse(raw.contents) : raw;
-      if (!data.audioContent) continue;
-      const bytes = atob(data.audioContent);
-      const buf = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
-      const blob = new Blob([buf], { type: 'audio/mpeg' });
-      const burl = URL.createObjectURL(blob);
-      const audio = new Audio(burl);
-      audio.onended = () => URL.revokeObjectURL(burl);
-      await audio.play();
-      return; // success
-    } catch(e) { continue; }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ABAIR_TIMEOUT_MS);
+  let data;
+  try {
+    const res = await fetch(ABAIR_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        synthinput: { text: txt, normalise: true },
+        voiceparams: { languageCode: 'ga-IE', name: ABAIR_VOICE },
+        audioconfig: { audioEncoding: 'MP3' }
+      }),
+      signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error('Abair HTTP ' + res.status);
+    data = await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  throw new Error('All proxies failed');
+  if (!data.audioContent) throw new Error('Abair returned no audio');
+  const audio = new Audio('data:audio/mpeg;base64,' + data.audioContent);
+  await audio.play();
 }
 
 function tryWebSpeech(txt) {
@@ -354,12 +351,15 @@ function tryWebSpeech(txt) {
 }
 
 async function abair(txt) {
-  try { await tryAbairAPI(txt); return; } catch(e) {}
+  let abairError;
+  try { await tryAbairAPI(txt); return; } catch(e) { abairError = e; }
   // Only use Web Speech if an Irish voice is actually available
   loadVoices();
-  if (_irishVoice) { try { tryWebSpeech(txt); return; } catch(e) {} }
+  let fallback = 'new_tab';
+  if (_irishVoice) { try { tryWebSpeech(txt); fallback = 'web_speech'; } catch(e) {} }
   // No Irish voice — open Abair in new tab for correct pronunciation
-  window.open('https://abair.ie/synthesis?text=' + encodeURIComponent(txt) + '&dialect=Ulster', '_blank');
+  if (fallback === 'new_tab') window.open('https://abair.ie/synthesis?text=' + encodeURIComponent(txt) + '&dialect=Ulster', '_blank');
+  posthog.capture('audio_playback_failed', { error: abairError.name, message: abairError.message, fallback });
 }
 
 function spkBtn(txt) {
