@@ -315,25 +315,18 @@ if ('speechSynthesis' in window) {
 }
 
 async function tryAbairAPI(txt) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), ABAIR_TIMEOUT_MS);
-  let data;
-  try {
-    const res = await fetch(ABAIR_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        synthinput: { text: txt, normalise: true },
-        voiceparams: { languageCode: 'ga-IE', name: ABAIR_VOICE },
-        audioconfig: { audioEncoding: 'MP3' }
-      }),
-      signal: ctrl.signal
-    });
-    if (!res.ok) throw new Error('Abair HTTP ' + res.status);
-    data = await res.json();
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await fetch(ABAIR_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      synthinput: { text: txt, normalise: true },
+      voiceparams: { languageCode: 'ga-IE', name: ABAIR_VOICE },
+      audioconfig: { audioEncoding: 'MP3' }
+    }),
+    signal: AbortSignal.timeout(ABAIR_TIMEOUT_MS)
+  });
+  if (!res.ok) throw new Error('Abair HTTP ' + res.status);
+  const data = await res.json();
   if (!data.audioContent) throw new Error('Abair returned no audio');
   const audio = new Audio('data:audio/mpeg;base64,' + data.audioContent);
   await audio.play();
